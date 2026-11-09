@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>BankSight | Banking Analytics</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+<aside class="sidebar">
+    <div class="brand-mark">₹</div>
+    <h2>BankSight</h2>
+    <p class="side-label">BANKING ANALYTICS</p>
+
+    <nav>
+        <a class="active" href="#dashboard">▦ Dashboard</a>
+        <a href="#add-transaction">＋ Add Transaction</a>
+        <a href="#recent-transactions">⇄ Transactions</a>
+        <a href="#reports">▤ Reports</a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <strong>College Project</strong>
+        <span>Fictional sample data</span>
+    </div>
+</aside>
+
+
+<main class="main-content" id="dashboard">
+
+    <header class="topbar">
+        <div>
+            <p class="eyebrow">ANALYTICS DASHBOARD</p>
+            <h1>Banking Overview</h1>
+            <p class="muted">
+                Monitor transactions, analyze activity, and review unusual transactions.
+            </p>
+        </div>
+
+        <span class="online">● System online</span>
+    </header>
+
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-container">
+                {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+
+    <section class="hero">
+        <div>
+            <p class="eyebrow light">WELCOME TO BANKSIGHT</p>
+            <h2>Your Transactions, Clearly Understood.</h2>
+            <p>
+                Explore deposits, withdrawals, payment methods, and monthly activity.
+            </p>
+        </div>
+
+        <div class="hero-symbol">₹</div>
+    </section>
+
+
+    <section class="stat-grid">
+
+        <article class="stat-card">
+            <span>Total Transactions</span>
+            <strong>{{ total_transactions }}</strong>
+            <small>All recorded transactions</small>
+        </article>
+
+        <article class="stat-card">
+            <span>Total Deposits</span>
+            <strong>₹{{ "{:,.2f}".format(total_deposits|float) }}</strong>
+            <small>Successful deposits</small>
+        </article>
+
+        <article class="stat-card">
+            <span>Total Withdrawals</span>
+            <strong>₹{{ "{:,.2f}".format(total_withdrawals|float) }}</strong>
+            <small>Successful withdrawals</small>
+        </article>
+
+        <article class="stat-card alert-card">
+            <span>Flagged for Review</span>
+            <strong>{{ flagged_count }}</strong>
+            <small>Manual review recommended</small>
+        </article>
+
+    </section>
+
+
+    <section class="panel" id="add-transaction">
+
+        <div class="section-heading">
+            <div>
+                <h2>Add Transaction</h2>
+                <p>Record a deposit or withdrawal for a sample account.</p>
+            </div>
+
+            <span class="pill">New Entry</span>
+        </div>
+
+        <form action="{{ url_for('add_transaction') }}"
+              method="POST"
+              class="transaction-form">
+
+            <div class="form-group">
+                <label for="account_id">Account</label>
+
+                <select id="account_id" name="account_id" required>
+                    <option value="">Select Account</option>
+
+                    {% for account in active_accounts %}
+                        <option value="{{ account.account_id }}">
+                            #{{ account.account_id }} —
+                            {{ account.account_number }}
+                            ({{ account.account_type }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="transaction_type">Transaction Type</label>
+
+                <select id="transaction_type"
+                        name="transaction_type"
+                        required>
+                    <option value="">Select Type</option>
+                    <option value="Deposit">Deposit</option>
+                    <option value="Withdrawal">Withdrawal</option>
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="amount">Amount (₹)</label>
+
+                <input type="number"
+                       id="amount"
+                       name="amount"
+                       min="0.01"
+                       max="9999999999.99"
+                       step="0.01"
+                       placeholder="e.g. 500.00"
+                       required>
+            </div>
+
+
+            <div class="form-group">
+                <label for="payment_method">Payment Method</label>
+
+                <select id="payment_method"
+                        name="payment_method"
+                        required>
+                    <option value="">Select Method</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+            </div>
+
+
+            <div class="form-group full-width">
+                <label for="description">
+                    Description <span class="optional">(optional)</span>
+                </label>
+
+                <input type="text"
+                       id="description"
+                       name="description"
+                       maxlength="255"
+                       placeholder="e.g. Monthly savings">
+            </div>
+
+
+            <div class="full-width form-actions">
+                <button type="submit" class="primary-button">
+                    ＋ Submit Transaction
+                </button>
+
+                <span class="form-hint">
+                    Large transactions may be flagged for manual review.
+                </span>
+            </div>
+
+        </form>
+    </section>
+
+
+    <section class="chart-grid">
+
+        <article class="panel chart-panel">
+            <div class="section-heading">
+                <div>
+                    <h2>Transaction Types</h2>
+                    <p>Successful deposits vs withdrawals</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="typeChart"></canvas>
+            </div>
+        </article>
+
+
+        <article class="panel chart-panel">
+            <div class="section-heading">
+                <div>
+                    <h2>Payment Methods</h2>
+                    <p>Successful transactions by method</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="paymentChart"></canvas>
+            </div>
+        </article>
+
+
+        <article class="panel chart-panel wide-chart">
+            <div class="section-heading">
+                <div>
+                    <h2>Monthly Transactions</h2>
+                    <p>Deposit and withdrawal totals by month</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </article>
+
+    </section>
+
+
+    <section class="panel" id="recent-transactions">
+
+        <div class="section-heading">
+            <div>
+                <h2>Recent Transactions</h2>
+                <p>Search and filter the sample transaction ledger.</p>
+            </div>
+
+            <span class="pill">{{ transactions|length }} Records</span>
+        </div>
+
+
+        <div class="filters">
+
+            <input type="search"
+                   id="searchInput"
+                   placeholder="Search account, ID, or description">
+
+            <select id="typeFilter">
+                <option value="">All Transaction Types</option>
+                <option value="Deposit">Deposit</option>
+                <option value="Withdrawal">Withdrawal</option>
+            </select>
+
+            <select id="paymentFilter">
+                <option value="">All Payment Methods</option>
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+
+            <button type="button"
+                    class="secondary-button"
+                    id="resetFilters">
+                Reset
+            </button>
+
+        </div>
+
+
+        <div class="table-wrap">
+            <table id="transactionsTable">
+
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th>Payment Method</th>
+                        <th>Status</th>
+                        <th>Review</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for t in transactions %}
+                    <tr data-type="{{ t.transaction_type }}"
+                        data-payment="{{ t.payment_method }}">
+
+                        <td>#{{ t.transaction_id }}</td>
+                        <td>{{ t.account_id }}</td>
+
+                        <td>
+                            <span class="type-badge {{ t.transaction_type|lower }}">
+                                {{ t.transaction_type }}
+                            </span>
+                        </td>
+
+                        <td class="money">
+                            ₹{{ "{:,.2f}".format(t.amount|float) }}
+                        </td>
+
+                        <td>{{ t.transaction_date }}</td>
+                        <td>{{ t.payment_method }}</td>
+
+                        <td>
+                            <span class="status-badge">
+                                {{ t.transaction_status }}
+                            </span>
+                        </td>
+
+                        <td>
+                            {% if t.review_flag %}
+                                <span class="review-badge">Review</span>
+                            {% else %}
+                                <span class="muted">—</span>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="empty-state">
+                            No transactions recorded yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                </tbody>
+            </table>
+        </div>
+
+        <p class="table-foot" id="rowCount">
+            Showing {{ transactions|length }} of {{ transactions|length }} transactions
+        </p>
+
+    </section>
+
+
+    <section class="report-grid" id="reports">
+
+        <article class="panel">
+            <div class="section-heading">
+                <div>
+                    <h2>Monthly Transaction Report</h2>
+                    <p>Totals grouped by month</p>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Deposits</th>
+                            <th>Withdrawals</th>
+                            <th>Successful</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in monthly_report %}
+                        <tr>
+                            <td>{{ row.month }}</td>
+                            <td>₹{{ "{:,.2f}".format(row.total_deposits|float) }}</td>
+                            <td>₹{{ "{:,.2f}".format(row.total_withdrawals|float) }}</td>
+                            <td>{{ row.successful_transactions or 0 }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4">No report data.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+
+        <article class="panel">
+            <div class="section-heading">
+                <div>
+                    <h2>Account-Wise Summary</h2>
+                    <p>Transaction totals for each account</p>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th>Customer</th>
+                            <th>Type</th>
+                            <th>Deposits</th>
+                            <th>Withdrawals</th>
+                            <th>Successful</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in account_summary %}
+                        <tr>
+                            <td>{{ row.account_id }}</td>
+                            <td>{{ row.customer_name }}</td>
+                            <td>{{ row.account_type }}</td>
+                            <td>₹{{ "{:,.2f}".format(row.total_deposits|float) }}</td>
+                            <td>₹{{ "{:,.2f}".format(row.total_withdrawals|float) }}</td>
+                            <td>{{ row.successful_transactions or 0 }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6">No account data.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+    </section>
+
+
+    <footer>
+        BankSight · Banking Transaction Analysis System
+        · Educational project using fictional data only.
+    </footer>
+
+</main>
+
+
+<script>
+const typeRows = {{ type_rows|tojson }};
+const monthlyRows = {{ monthly_chart_rows|tojson }};
+const paymentRows = {{ payment_rows|tojson }};
+
+
+new Chart(document.getElementById("typeChart"), {
+    type: "doughnut",
+    data: {
+        labels: typeRows.map(row => row.transaction_type),
+        datasets: [{
+            data: typeRows.map(row => Number(row.total))
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: "bottom" }
+        }
+    }
+});
+
+
+new Chart(document.getElementById("paymentChart"), {
+    type: "doughnut",
+    data: {
+        labels: paymentRows.map(row => row.payment_method),
+        datasets: [{
+            data: paymentRows.map(row => Number(row.count))
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: "bottom" }
+        }
+    }
+});
+
+
+new Chart(document.getElementById("monthlyChart"), {
+    type: "bar",
+    data: {
+        labels: monthlyRows.map(row => row.month),
+        datasets: [
+            {
+                label: "Deposits (₹)",
+                data: monthlyRows.map(row => Number(row.deposits))
+            },
+            {
+                label: "Withdrawals (₹)",
+                data: monthlyRows.map(row => Number(row.withdrawals))
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+
+
+const searchInput = document.getElementById("searchInput");
+const typeFilter = document.getElementById("typeFilter");
+const paymentFilter = document.getElementById("paymentFilter");
+
+const rows = Array.from(
+    document.querySelectorAll("#transactionsTable tbody tr[data-type]")
+);
+
+
+function filterRows() {
+    const query = searchInput.value.toLowerCase().trim();
+    let visible = 0;
+
+    rows.forEach(row => {
+        const matchesSearch =
+            row.innerText.toLowerCase().includes(query);
+
+        const matchesType =
+            !typeFilter.value || row.dataset.type === typeFilter.value;
+
+        const matchesPayment =
+            !paymentFilter.value || row.dataset.payment === paymentFilter.value;
+
+        const show = matchesSearch && matchesType && matchesPayment;
+
+        row.hidden = !show;
+
+        if (show) {
+            visible++;
+        }
+    });
+
+    document.getElementById("rowCount").textContent =
+        `Showing ${visible} of ${rows.length} transactions`;
+}
+
+
+[searchInput, typeFilter, paymentFilter].forEach(element => {
+    element.addEventListener("input", filterRows);
+});
+
+
+document.getElementById("resetFilters").addEventListener("click", () => {
+    searchInput.value = "";
+    typeFilter.value = "";
+    paymentFilter.value = "";
+    filterRows();
+});
+</script>
+
+</body>
+</html>
